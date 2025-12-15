@@ -44,7 +44,7 @@ for path in modePathList:
 
 # Load face encodings
 print("Loading Encoded File")
-with open(r'encoded_file.p', 'rb') as f:
+with open(r'images/encoded_file.p', 'rb') as f:
     encode_list_known_with_ids = pickle.load(f)
 encode_list_known, studentIds = encode_list_known_with_ids
 print(f"Loaded {len(studentIds)} people: {studentIds}")
@@ -210,8 +210,10 @@ try:
                         if not (speech_thread and speech_thread.is_alive()):
                             try:
                                 import speech_recognition as _sr
+                                from alsa_error import no_alsa_error
                                 try:
-                                    _sr.Microphone()
+                                    with no_alsa_error():
+                                        _sr.Microphone()
                                     mic_available = True
                                 except Exception as _e:
                                     mic_available = False
@@ -249,6 +251,7 @@ try:
                         payload = "Hello there!"
                         speak(payload)
                         last_seen[unknown_key] = current_time
+                        last_primary_person = unknown_key
                         last_primary_person = unknown_key
 
                     cv2.rectangle(imgBackground, (55+x1, 162+y1), (55+x2, 162+y2), (0, 0, 255), 2, cv2.LINE_AA)
