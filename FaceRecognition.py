@@ -31,7 +31,7 @@ class FaceRecognitionThread(QThread):
 
     def run(self) -> None:
         print("Loading Encoder File")
-        with open('encoded_file.p', 'rb') as f:
+        with open('images/encoded_file.p', 'rb') as f:
             encode_list_known_with_ids = pickle.load(f)
 
         encode_list_known, faceIds = encode_list_known_with_ids
