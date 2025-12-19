@@ -26,30 +26,50 @@ class SpeechRecognitionThread(threading.Thread):
         else:
             self.wake_words = ['omnis', 'hello']
         self.recognizer = sr.Recognizer()
+        # SUPER SENSITIVITY SETTINGS
+        self.recognizer.energy_threshold = 300  # Start lower (sensitive)
+        self.recognizer.dynamic_energy_threshold = True
+        self.recognizer.pause_threshold = 0.8  # Stop listening faster
+        self.recognizer.phrase_threshold = 0.3  # Detect speech faster
+        self.recognizer.non_speaking_duration = 0.4
 
     def _open_microphone(self) -> bool:
+        # Priority 1: Try index 4 (standard for this Pi setup)
+        # Priority 2: Try to find any USB microphone automatically
+        indices_to_try = [4]
         try:
-            if self.microphone is None:
-                try:
+            mics = sr.Microphone.list_microphone_names()
+            for i, name in enumerate(mics):
+                if any(x in name.lower() for x in ["usb", "mic", "webcam", "c-media"]) and i != 4:
+                    indices_to_try.append(i)
+        except:
+            pass
+        
+        # Finally try index 0 as absolute fallback
+        if 0 not in indices_to_try: indices_to_try.append(0)
+
+        for idx in indices_to_try:
+            try:
+                print(f"[Microphone] Trying index {idx}...")
+                # Check if no_alsa_error is defined (from alsa_error.py)
+                if 'no_alsa_error' in globals():
                     from alsa_error import no_alsa_error
                     with no_alsa_error():
-                        self.microphone = sr.Microphone(device_index=4)
-                except ImportError:
-                    self.microphone = sr.Microphone(device_index=4)
-            return True
-        except Exception as e:
-            print(f"[Microphone] Could not open microphone: {e}")
-            try:
-                self.microphone = sr.Microphone(device_index=4)
+                        self.microphone = sr.Microphone(device_index=idx)
+                else:
+                    self.microphone = sr.Microphone(device_index=idx)
+                # Verify it works
+                with self.microphone as source:
+                    self.recognizer.adjust_for_ambient_noise(source, duration=0.1)
+                print(f"✅ Mic Connected on Index {idx}")
                 return True
-            except:
-                return False
+            except Exception:
+                continue
+        
+        print("❌ Could not find any working microphone.")
+        return False
 
     def run(self) -> None:
-        self.recognizer.dynamic_energy_threshold = True
-        self.recognizer.pause_threshold = 1.0  
-        self.recognizer.non_speaking_duration = 0.5
-
         print("\n" + "=" * 50)
         print("🎤 VOICE RECOGNITION STARTED")
         print("=" * 50)
