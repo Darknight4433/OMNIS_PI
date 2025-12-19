@@ -68,13 +68,8 @@ def get_chat_response(payload: str):
         except Exception:
             pass
 
-        model = genai.GenerativeModel(
-            'gemini-1.5-flash',
-            system_instruction=("You are OMNIS, a helpful school assistant robot. "
-                                "Keep answers brief and concise. "
-                                "Be friendly and to the point."),
-        )
-
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
         # Allow token tuning via env var for Pi or testing
         max_tokens = int(os.environ.get('GEMINI_MAX_TOKENS', '300'))
         temperature = float(os.environ.get('GEMINI_TEMPERATURE', '0.6'))
@@ -84,8 +79,14 @@ def get_chat_response(payload: str):
         content = None
         for attempt in range(2):
             try:
+                # Add system instruction directly to the prompt instead
+                full_prompt = (
+                    "You are OMNIS, a helpful school assistant robot. "
+                    "Keep answers brief and concise. Be friendly.\n\n"
+                    f"User: {payload}"
+                )
                 response = model.generate_content(
-                    payload,
+                    full_prompt,
                     generation_config=genai.types.GenerationConfig(
                         max_output_tokens=max_tokens,
                         temperature=temperature,
