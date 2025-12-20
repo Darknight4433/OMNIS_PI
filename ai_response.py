@@ -69,16 +69,35 @@ def get_chat_response(payload: str):
             if os.environ.get('OMNIS_DEBUG') == '1':
                 print(f"[DEBUG] Config error: {e}")
 
-        # Try standard name first, then latest fallback
-        # Removed '-latest' as it causes 404s on some older API keys/regions
-        models_to_try = [
-            'gemini-1.5-flash', 
-            'gemini-1.5-flash-8b', 
-            'gemini-1.5-pro', 
-            'gemini-pro'
-        ]
+        # --- MODEL AUTO-DISCOVERY ---
+        # Instead of guessing names (which causes 404s), we ask the API what it supports
+        discovered_models = []
+        try:
+            for m in genai.list_models():
+                if 'generateContent' in m.supported_generation_methods:
+                    # Clean the name (remove 'models/' prefix if present for the constructor)
+                    m_name = m.name.split('/')[-1]
+                    discovered_models.append(m_name)
+            
+            # Sort to prioritize 1.5-flash, then 1.5-pro, then others
+            priority = ['gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-1.5-pro', 'gemini-pro']
+            models_to_try = [p for p in priority if p in discovered_models]
+            # Add any other discovered models as final fallbacks
+            for m in discovered_models:
+                if m not in models_to_try:
+                    models_to_try.append(m)
+            
+            if os.environ.get('OMNIS_DEBUG') == '1' and models_to_try:
+                print(f"[DEBUG] Found working models: {models_to_try}")
+        except Exception as e:
+            if os.environ.get('OMNIS_DEBUG') == '1':
+                print(f"[DEBUG] Model discovery failed: {e}")
+            # Absolute fallback if discovery fails
+            models_to_try = ['gemini-1.5-flash', 'gemini-pro']
+
         content = None
         last_err = ""
+        used_model = "None"
 
         # Relaxation of safety filters for educational use
         safety_settings = [
@@ -90,18 +109,16 @@ def get_chat_response(payload: str):
 
         for model_name in models_to_try:
             try:
+                used_model = model_name
                 model = genai.GenerativeModel(model_name)
                 
                 # Allow token tuning via env var for Pi or testing
                 max_tokens = int(os.environ.get('GEMINI_MAX_TOKENS', '300'))
                 temperature = float(os.environ.get('GEMINI_TEMPERATURE', '0.7'))
 
-                # Add system instruction directly to the prompt
                 # Improved prompt to allow general knowledge
                 full_prompt = (
                     "You are OMNIS, a friendly and intelligent school assistant robot. "
-                    "Your primary goal is to help students and staff with their questions. "
-                    "You can answer school-specific questions and also general knowledge questions. "
                     "Keep answers brief, concise, and engaging. Be helpful. "
                     "Ignore markdown formatting like bold, asterisks, or bullet points.\n\n"
                     f"User: {payload}"
@@ -121,9 +138,6 @@ def get_chat_response(payload: str):
                     if hasattr(response, 'text') and response.text:
                         content = response.text
                 except Exception as e:
-                    if os.environ.get('OMNIS_DEBUG') == '1':
-                        print(f"[DEBUG] Content blocked or error: {e}")
-                    
                     # Fallback for blocked content - try to get whatever is there
                     if hasattr(response, 'candidates') and response.candidates:
                         try:
@@ -137,8 +151,6 @@ def get_chat_response(payload: str):
                     break # Success!
             except Exception as e:
                 last_err = str(e)
-                if os.environ.get('OMNIS_DEBUG') == '1':
-                    print(f"[DEBUG] Model {model_name} failed: {e}")
                 continue
 
         if content and str(content).strip():
