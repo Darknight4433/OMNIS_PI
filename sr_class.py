@@ -1,7 +1,23 @@
 import threading
 import time
 import os
+import ctypes
 import speech_recognition as sr
+
+# --- ALSA SILENCER ---
+# This prevents the massive log spam from ALSA/PortAudio
+ERROR_HANDLER_FUNC = ctypes.CFUNCTYPE(None, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p)
+def py_error_handler(filename, line, function, err, fmt):
+    pass
+
+c_error_handler = ERROR_HANDLER_FUNC(py_error_handler)
+
+try:
+    asound = ctypes.cdll.LoadLibrary('libasound.so.2')
+    asound.snd_lib_error_set_handler(c_error_handler)
+except:
+    pass
+# ---------------------
 
 from speaker import GTTSThread, is_speaking
 from ai_response import get_chat_response
@@ -29,9 +45,9 @@ class SpeechRecognitionThread(threading.Thread):
         # SUPER SENSITIVITY SETTINGS
         self.recognizer.energy_threshold = 300  # Start lower (sensitive)
         self.recognizer.dynamic_energy_threshold = True
-        self.recognizer.pause_threshold = 0.8  # Stop listening faster
-        self.recognizer.phrase_threshold = 0.3  # Detect speech faster
-        self.recognizer.non_speaking_duration = 0.4
+        self.recognizer.pause_threshold = 0.5  # Stop listening faster (was 0.8)
+        self.recognizer.phrase_threshold = 0.3
+        self.recognizer.non_speaking_duration = 0.3 # faster turnaround
 
     def _open_microphone(self) -> bool:
         # Debug: List all microphones
@@ -85,18 +101,17 @@ class SpeechRecognitionThread(threading.Thread):
             try:
                 # 1. Wait if speaking BEFORE opening the mic
                 while is_speaking() and not self.stop_event.is_set():
-                    print("🔇 Speaker active, waiting to listen...")
-                    time.sleep(0.5)
+                    # Reduced poll time from 0.5 to 0.1 for better responsiveness
+                    time.sleep(0.1)
 
                 with self.microphone as source:
                     # Only adjust for noise if we aren't already in conversation
                     # or do it quickly to avoid missing the user
                     if not self.conversation_active:
-                        print("🔊 Adjusting for ambient noise...")
-                        self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
-                        
-                        # AGGRESSIVE CAPPING for noisy environments
-                        if self.recognizer.energy_threshold > 2000:
+                        # Only adjust if energy threshold is too low or not set
+                        if self.recognizer.energy_threshold < 300:
+                            print("🔊 Adjusting for ambient noise...")
+                            self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
                             print(f"   (Auto-capping high noise: {self.recognizer.energy_threshold} -> 2000)")
                             self.recognizer.energy_threshold = 2000
                         
