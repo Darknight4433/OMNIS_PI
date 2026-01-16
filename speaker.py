@@ -41,7 +41,15 @@ class GTTSThread(threading.Thread):
                     try:
                         # Re-initialize mixer if needed
                         if not pygame.mixer.get_init():
-                            pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=4096)
+                            try:
+                                # Prioritize Card 1 (USB) on Raspberry Pi if detected
+                                if os.path.exists('/proc/asound/card1'):
+                                    os.environ['SDL_ALSA_CHANNELS'] = '2'
+                                    pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=4096)
+                                else:
+                                    pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=4096)
+                            except:
+                                pygame.mixer.init() # Absolute fallback
                         
                         pygame.mixer.music.load(filename)
                         pygame.mixer.music.play()
