@@ -13,3 +13,4 @@ awaiting_name: bool = False
 awaiting_encoding: Optional[object] = None
 # Small RGB image (numpy array) cropped around the unknown face (ready to write)
 awaiting_face_image: Optional[object] = None
+detected_people = [] # Live list of people currently in frame

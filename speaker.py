@@ -36,20 +36,24 @@ class GTTSThread(threading.Thread):
                     tts = gTTS(text=text_to_speak, lang='en', tld='com')
                     tts.save(filename)
 
-                    # 2. Play Audio via Digital Pipe (Highest Reliability on Pi)
-                    # Use mpg123 with alsa driver for better device control
-                    # We use -o alsa to force ALSA instead of libao
-                    # Flag -a is used for audio device in most mpg123 versions
-                    cmd = f"mpg123 -q -o alsa -a hw:1,0 {filename}"
-                    exit_code = os.system(cmd)
-                    
-                    if exit_code != 0:
-                        # Fallback to the original pipe if mpg123 isn't working/custom config
-                        os.system(f"mpg321 -q -w - {filename} | aplay -D plughw:1,0 -q")
+                    # 2. Play Audio (Cross Platform)
+                    # Use pygame instead of system calls for Windows compatibility
+                    try:
+                        pygame.mixer.init()
+                        pygame.mixer.music.load(filename)
+                        pygame.mixer.music.play()
+                        while pygame.mixer.music.get_busy():
+                            time.sleep(0.1)
+                        pygame.mixer.music.unload() # Release file
+                    except Exception as e:
+                        print(f"Pygame Audio Error: {e}")
                     
                     # Cleanup
                     if os.path.exists(filename):
-                        os.remove(filename)
+                        try:
+                            os.remove(filename)
+                        except:
+                            pass
 
                 except Exception as e:
                     print(f"Speaker Error: {e}")

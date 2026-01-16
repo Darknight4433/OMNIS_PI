@@ -34,36 +34,38 @@ class SpeechRecognitionThread(threading.Thread):
         self.recognizer.non_speaking_duration = 0.4
 
     def _open_microphone(self) -> bool:
-        # Priority 1: Try index 4 (standard for this Pi setup)
-        # Priority 2: Try to find any USB microphone automatically
-        indices_to_try = [4]
+        # Debug: List all microphones
+        print("\nSearching for microphones...")
         try:
             mics = sr.Microphone.list_microphone_names()
             for i, name in enumerate(mics):
-                if any(x in name.lower() for x in ["usb", "mic", "webcam", "c-media"]) and i != 4:
-                    indices_to_try.append(i)
+                print(f"  [{i}] {name}")
         except:
-            pass
+            print("  (Could not list microphones)")
+
+        # On Windows, using default (index=None) is usually best.
+        # On Pi, we might need specific indices.
+        indices_to_try = [None] # None = System Default
         
-        # Finally try index 0 as absolute fallback
-        if 0 not in indices_to_try: indices_to_try.append(0)
+        # Add index 1, 0, 2 just in case
+        for i in range(len(mics) if 'mics' in locals() else 3):
+             if i not in indices_to_try: indices_to_try.append(i)
 
         for idx in indices_to_try:
             try:
-                print(f"[Microphone] Trying index {idx}...")
-                # Check if no_alsa_error is defined (from alsa_error.py)
-                if 'no_alsa_error' in globals():
-                    from alsa_error import no_alsa_error
-                    with no_alsa_error():
-                        self.microphone = sr.Microphone(device_index=idx)
-                else:
-                    self.microphone = sr.Microphone(device_index=idx)
-                # Verify it works
+                name = "Default" if idx is None else str(idx)
+                print(f"[Microphone] Trying index {name}...")
+                
+                self.microphone = sr.Microphone(device_index=idx)
+                
+                # Fast calibration
                 with self.microphone as source:
-                    self.recognizer.adjust_for_ambient_noise(source, duration=0.1)
-                print(f"✅ Mic Connected on Index {idx}")
+                    self.recognizer.adjust_for_ambient_noise(source, duration=1.0)
+                
+                print(f"✅ Mic Connected on Index {name}")
                 return True
-            except Exception:
+            except Exception as e:
+                # print(f"   Failed index {idx}: {e}")
                 continue
         
         print("❌ Could not find any working microphone.")
@@ -91,9 +93,16 @@ class SpeechRecognitionThread(threading.Thread):
                     # or do it quickly to avoid missing the user
                     if not self.conversation_active:
                         print("🔊 Adjusting for ambient noise...")
-                        self.recognizer.adjust_for_ambient_noise(source, duration=0.8)
-                        if self.recognizer.energy_threshold < 100:
-                             self.recognizer.energy_threshold = 100
+                        self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
+                        
+                        # AGGRESSIVE CAPPING for noisy environments
+                        if self.recognizer.energy_threshold > 2000:
+                            print(f"   (Auto-capping high noise: {self.recognizer.energy_threshold} -> 2000)")
+                            self.recognizer.energy_threshold = 2000
+                        
+                        # Set minimum threshold higher to ignore background
+                        if self.recognizer.energy_threshold < 300:
+                             self.recognizer.energy_threshold = 300
                         print(f"   Noise level: {self.recognizer.energy_threshold}\n")
 
                     if self.conversation_active:
@@ -106,7 +115,12 @@ class SpeechRecognitionThread(threading.Thread):
                         if is_speaking():
                             continue
 
-                        audio_data = self.recognizer.listen(source, timeout=5, phrase_time_limit=8)
+                        # Dynamic energy adjustment helps in noisy environments
+                        audio_data = self.recognizer.listen(
+                            source, 
+                            timeout=5, 
+                            phrase_time_limit=10
+                        )
 
                         # Skip processing if we started speaking while listening (rare but possible)
                         if is_speaking():
@@ -116,7 +130,11 @@ class SpeechRecognitionThread(threading.Thread):
                         print("🔄 Processing audio...")
                         text = self.recognizer.recognize_google(audio_data)
                         print(f"📝 Heard: '{text}'")
-
+                        
+                        # Fix common mishearings of "Omnis"
+                        text_lower = text.lower()
+                        text_lower = text_lower.replace("omni's", "omnis").replace("omni", "omnis").replace("omens", "omnis").replace("honest", "omnis")
+                        
                         if getattr(shared_state, 'awaiting_name', False):
                             name_spoken = text.strip()
                             greetings = {'hello', 'hi', 'hey', 'thanks', 'thank you'}
@@ -133,13 +151,12 @@ class SpeechRecognitionThread(threading.Thread):
                             if ok:
                                 self.speaker.speak(f"Thanks {name_spoken}, I will remember you.")
                             else:
-                                self.speaker.speak("Sorry, I couldn't save your name.")
+                                self.speaker.speak(f"Sorry, I couldn't save your name.")
                             shared_state.awaiting_name = False
                             shared_state.awaiting_encoding = None
                             shared_state.awaiting_face_image = None
                             continue
 
-                        text_lower = text.lower()
                         tokens = text_lower.split()
                         
                         if self.conversation_active:
@@ -149,16 +166,62 @@ class SpeechRecognitionThread(threading.Thread):
 
                         if has_wake_word or self.conversation_active:
                             if has_wake_word:
-                                print("\n✅ WAKE WORD DETECTED!\n")
-                                self.speaker.speak("Yes, how can I help you?")
-                                self.conversation_active = True
-                            else:
-                                print("\n💬 Follow-up question\n")
+                                 # Standard wake word response (unless we are silencing)
+                                 pass 
 
                             question = text_lower
                             for w in self.wake_words:
                                 question = question.replace(w, "")
                             question = question.strip()
+                            
+                            # --- VOICE COMMANDS ---
+                            
+                            # 1. SILENCE / STOP
+                            if any(x in question for x in ["silence", "silent", "stop talking", "shut up", "hush"]):
+                                print("\n🛑 SILENCE COMMAND DETECTED")
+                                self.speaker.stop() # Stop current thread? Or just queue?
+                                # We need a way to clear the queue in speaker.py really.
+                                # For now, we just don't reply and reset state.
+                                self.conversation_active = False 
+                                # Maybe a quick ACK?
+                                # self.speaker.speak("Ok.")
+                                continue
+                                
+                            # 2. WHO IS HERE?
+                            if any(x in question for x in ["who is here", "who are inside", "detect people", "guess me", "who am i"]):
+                                people = getattr(shared_state, 'detected_people', [])
+                                if not people:
+                                    self.speaker.speak("I don't see anyone right now.")
+                                else:
+                                    # Filter out 'Unknown'
+                                    knowns = [p for p in people if p != "Unknown"]
+                                    unknown_count = people.count("Unknown")
+                                    
+                                    response_parts = []
+                                    if knowns:
+                                        names = ", ".join(knowns)
+                                        response_parts.append(f"I can see {names}.")
+                                    if unknown_count > 0:
+                                        response_parts.append(f"and {unknown_count} unknown people.")
+                                    
+                                    if response_parts:
+                                        self.speaker.speak(" ".join(response_parts))
+                                    else:
+                                        self.speaker.speak("I see some people, but I don't know their names.")
+                                continue
+                                
+                            # 3. RESUME / CONTINUE
+                            if any(x in question for x in ["continue", "speak again", "hello silence", "resume"]):
+                                self.speaker.speak("Ok, I am listening.")
+                                self.conversation_active = True
+                                continue
+
+
+                            if has_wake_word:
+                               print("\n✅ WAKE WORD DETECTED!\n")
+                               self.speaker.speak("Yes?") # Quick ack
+                               self.conversation_active = True
+
                             
                             if question and len(question) >= 3:
                                 print(f"❓ Question: {question}\n")

@@ -1,80 +1,19 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# C extensions
-*.so
-
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# PyInstaller
-*.manifest
-*.spec
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-.hypothesis/
-.pytest_cache/
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Project specific
-*.mp3
-temp_*.mp3
-output.mp3
-test.wav
-*.log
-
-# Sensitive data
-.gemini/
-encoded_file.p.backup
-*.key
-run_omnis.bat
-run_omnis.sh
+# Ignore sensitive files
+api_keys.py
 secrets_local.py
 
-# Temporary files
-*.tmp
-*.bak
+# Ignore generated files
+encodings.pickle
+*.pyc
+__pycache__/
+
+# Ignore test files
+test_*.py
+diagnose_log.txt
+
+# Ignore temporary audio files
+speak_*.mp3
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
