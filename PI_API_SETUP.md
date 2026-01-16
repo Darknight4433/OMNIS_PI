@@ -16,12 +16,13 @@ nano api_keys.py
 Replace the placeholder text with your actual Google Gemini API keys:
 
 ```python
+
 API_KEYS = [
     "AIzaSyCdwloWxhjYb7sHMPRVvsrFigPa2iciR8k",  # Your working key
-    "AIzaSyDNROLFml7U2YSmrvv_wq15T4k5rPjyjCs",
-    "AIzaSyBHEvnBJ1H1Hij7azx0AsAqrsXgwYkz_bM",
-    "AIzaSyB1OA-RG8bNNsGt-iKcsYJX8W9Exouy4hc",
-    "AIzaSyClY7dnzadHZCEBJV2IFd42KaMpcuoJXDQ"
+    "AIzaSyAGw82x3qbRMf0aF1XbUbyr1-N8cn-tfus",
+    "AIzaSyC9TzuoMFNm0UeCyAPeIlxKWxZRrYhzedY",
+    "AIzaSyCB_KAyLJ34m26QlN2AzFnhDKqmQ9CXJVs",
+    "AIzaSyAJJ7snqwJWG4sQ7-0tSSqFph8pSRGl-Y8",
 ]
 ```
 
