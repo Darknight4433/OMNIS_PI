@@ -17,9 +17,6 @@ class GreetingManager:
             "Pooja": "Mam",
             "Sukumaran": "sir",
             "Deva Nandan": "Deva",
-            "Rakesh N K": "Rakesh Sir",
-            "Shinila": "Chinnu",
-            "Gayathri": "Chinju",
         }
         
         # VIP / Special Introductions
