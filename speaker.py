@@ -37,35 +37,43 @@ class GTTSThread(threading.Thread):
                     tts.save(filename)
 
                     # 2. Play Audio (Cross Platform)
-                    # Use pygame instead of system calls for Windows compatibility
-                    try:
-                        # Re-initialize mixer if needed
-                        if not pygame.mixer.get_init():
-                            try:
-                                # Prioritize Card 1 (USB) on Raspberry Pi if detected
-                                if os.path.exists('/proc/asound/card1'):
-                                    os.environ['SDL_ALSA_CHANNELS'] = '2'
-                                    pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=4096)
-                                else:
-                                    pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=4096)
-                            except:
-                                pygame.mixer.init() # Absolute fallback
-                        
-                        pygame.mixer.music.load(filename)
-                        pygame.mixer.music.play()
-                        
-                        while pygame.mixer.music.get_busy():
-                            time.sleep(0.1)
-                            
-                        # Use try-except for unload as it's missing in some older pygame versions
+                    # For Raspberry Pi USB speakers (Card 1)
+                    if os.path.exists('/proc/asound/card1'):
+                         os.environ['AUDIODEV'] = 'hw:1,0'
+                         os.environ['SDL_PATH_ALSA_DEVICE'] = 'hw:1,0'
+                         os.environ['SDL_ALSA_DEVICE'] = 'hw:1,0'
+
+                    # Try mpg123 first on Linux if available (more reliable for MP3 on Pi)
+                    played = False
+                    if os.name != 'nt':
                         try:
-                            if hasattr(pygame.mixer.music, 'unload'):
-                                pygame.mixer.music.unload()
+                            # Try to use mpg123 which handles card selection well
+                            device = "hw:1,0" if os.path.exists('/proc/asound/card1') else "default"
+                            res = os.system(f"mpg123 -q -a {device} {filename} > /dev/null 2>&1")
+                            if res == 0:
+                                played = True
                         except:
                             pass
+
+                    if not played:
+                        try:
+                            # Re-initialize mixer if needed
+                            if not pygame.mixer.get_init():
+                                pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=4096)
                             
-                    except Exception as e:
-                        print(f"Pygame Audio Error: {e}")
+                            pygame.mixer.music.load(filename)
+                            pygame.mixer.music.play()
+                            
+                            while pygame.mixer.music.get_busy():
+                                time.sleep(0.1)
+                                
+                            try:
+                                if hasattr(pygame.mixer.music, 'unload'):
+                                    pygame.mixer.music.unload()
+                            except:
+                                pass
+                        except Exception as e:
+                            print(f"Pygame Audio Error: {e}")
                     
                     # Cleanup
                     if os.path.exists(filename):
