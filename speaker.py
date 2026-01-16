@@ -11,6 +11,16 @@ _global_speaker_active = False
 def is_speaking():
     return _global_speaker_active
 
+def speak_offline(text):
+    """Fast offline TTS using espeak-ng"""
+    try:
+        # Use espeak-ng for instant feedback
+        # -s 150 (speed), -p 50 (pitch), -v en (voice)
+        os.system(f"espeak-ng -s 160 -p 40 '{text}' > /dev/null 2>&1")
+        return True
+    except:
+        return False
+
 class GTTSThread(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self)
@@ -31,7 +41,17 @@ class GTTSThread(threading.Thread):
             if text_to_speak:
                 _global_speaker_active = True
                 try:
-                    # 1. Generate Audio file
+                    # SPEED OPTIMIZATION: Use offline TTS for short common phrases
+                    # This makes greetings and basic ACKs instant.
+                    short_phrases = ["yes?", "ok.", "hello!", "hi.", "welcome."]
+                    text_lower = text_to_speak.lower().strip()
+                    
+                    if len(text_to_speak) < 25 or any(p in text_lower for p in short_phrases):
+                        if speak_offline(text_to_speak):
+                             _global_speaker_active = False # Reset immediately
+                             continue
+
+                    # 1. Generate Audio file (High Quality for AI answers)
                     filename = f"speak_{uuid.uuid4()}.mp3"
                     tts = gTTS(text=text_to_speak, lang='en', tld='com')
                     tts.save(filename)

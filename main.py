@@ -21,8 +21,8 @@ speaker_adapter = SpeakerAdapter()
 # Global Configuration
 FACE_MATCH_TOLERANCE = float(os.environ.get('FACE_MATCH_TOLERANCE', '0.50'))
 MAX_FACES = int(os.environ.get('FACE_MAX_FACES', '4'))
-FRAME_SKIP = 3  # Process Face Recognition every Nth frame for speed
-RESIZE_FACTOR = 0.25 # Downscale factor for face recognition
+FRAME_SKIP = 5  # Increased for speed (Process face every 5 frames)
+RESIZE_FACTOR = 0.20 # Downscale more (0.20 instead of 0.25)
 
 # Initialize Greeting Manager
 greeter = GreetingManager()
@@ -159,8 +159,8 @@ def main():
             if current_faces:
                 # We have faces (either fresh or cached from previous frame)
                 for i, (y1, x2, y2, x1) in enumerate(current_faces):
-                    # Scale back up
-                    y1, x2, y2, x1 = y1*4, x2*4, y2*4, x1*4
+                    # Scale back up (1 / 0.20 = 5)
+                    y1, x2, y2, x1 = y1*5, x2*5, y2*5, x1*5
                     person_id = current_ids[i]
                     
                     if person_id != "Unknown":
