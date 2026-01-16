@@ -73,22 +73,21 @@ def get_chat_response(payload: str):
     if not API_KEYS:
         return {"choices": [{"message": {"content": "I need an API key to think."}}]}
 
-    # Model list based on Google AI Studio (2026-01-16)
+    # Model list: prioritize stable, widely available models
     models_to_try = [
-        'gemini-2.5-flash',          # Latest fast model
-        'gemini-2.5-flash-lite',
-        'gemini-3-flash',
-        'gemini-2.0-flash-exp',
-        'gemini-1.5-flash',          # Fallback to older
-        'gemini-1.5-pro'
+        'gemini-2.0-flash',          # New stable flash
+        'gemini-1.5-flash',          # Reliable fallback
+        'gemini-1.5-pro',            # High-capability fallback
+        'gemini-2.0-flash-exp'       # Experimental
     ]
     
-    max_retries = len(API_KEYS) # Try each key once
+    max_retries = len(API_KEYS) 
     retries = 0
     
     while retries < max_retries:
         content = None
         last_err = ""
+        should_rotate_key = False
         
         for model_name in models_to_try:
             try:
@@ -103,45 +102,46 @@ def get_chat_response(payload: str):
                     )
                 )
                 
-                # Extract text
                 if hasattr(response, 'text') and response.text:
                     content = response.text.strip()
                 elif hasattr(response, 'parts'):
                     content = response.parts[0].text.strip()
                 elif response.candidates:
-                     content = response.candidates[0].content.parts[0].text.strip()
+                    content = response.candidates[0].content.parts[0].text.strip()
                 
                 if content: break 
 
             except Exception as e:
                 err_str = str(e).lower()
-                # Check for Quota/Rate Limit Errors AND 404 (Model not found for this key/region)
-                if any(x in err_str for x in ["429", "quota", "limit", "resource", "404", "not found"]):
-                    print(f"⚠️ Key #{current_key_index + 1} failed (Quota/Auth/404). Rotating...")
-                    # Force break to outer loop to rotate key
-                    last_err = "QUOTA_OR_AUTH" 
+                # 429/Quota/Rate Limit: These means the KEY is exhausted. Rotate key.
+                if any(x in err_str for x in ["429", "quota", "limit", "resource", "exhausted"]):
+                    print(f"⚠️ Key #{current_key_index + 1} quota reached. Rotating...")
+                    should_rotate_key = True
                     break 
-                else:
-                    # Generic error, try next model on SAME key
-                    last_err = str(e)
-                    continue
+                
+                # 404/Permission/Auth: These usually mean the MODEL is not found or key is bad.
+                # Try next model on the same key first.
+                last_err = f"Model {model_name} failed: {e}"
+                continue
 
         if content:
-            # Success!
             clean_text = content.replace('*', '').replace('#', '').replace('**', '')
             return {'choices': [{'message': {'content': clean_text}}]}
             
-        if last_err == "QUOTA_OR_AUTH":
-            # Rotate key and retry immediately
+        if should_rotate_key:
             current_key_index = (current_key_index + 1) % len(API_KEYS)
             configure_next_key()
             retries += 1
             continue
         else:
-            print(f"❌ AI Failure: {last_err}")
-            return {'choices': [{'message': {'content': "I'm having trouble thinking right now."}}]}
+            # If we've tried all models on this key and still no luck, try next key
+            print(f"⚠️ Key #{current_key_index + 1} could not process request. Trying next key...")
+            current_key_index = (current_key_index + 1) % len(API_KEYS)
+            configure_next_key()
+            retries += 1
+            continue
 
-    return {'choices': [{'message': {'content': "My daily brain power is exhausted."}}]}
+    return {'choices': [{'message': {'content': "My daily brain power is exhausted. Please check my API keys."}}]}
 
 if __name__ == '__main__':
     # Test
